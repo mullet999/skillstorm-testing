@@ -1,0 +1,86 @@
+# Use an Ubuntu base image
+FROM ubuntu:24.04
+
+# Set non-interactive mode for apt-get
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install dependencies
+RUN apt-get update && apt-get install -y \
+    git \
+    nano \
+    curl \
+    unzip \
+    apt-transport-https \
+    software-properties-common \
+    gnupg \
+    lsb-release \
+    wget \
+    python3 \
+    python3-pip \
+    openjdk-11-jdk \
+    libxext6 \
+    libxrender1 \
+    libxtst6 \
+    libfreetype6 \
+    libxi6 \
+    libxrandr2 \
+    libxcb1 \
+    sudo && \
+    rm -rf /var/lib/apt/lists/*
+
+# Install Azure CLI
+RUN curl -sL https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor > microsoft.gpg && \
+    install -o root -g root -m 644 microsoft.gpg /usr/share/keyrings/ && \
+    echo "deb [arch=amd64 signed-by=/usr/share/keyrings/microsoft.gpg] https://packages.microsoft.com/repos/azure-cli/ $(lsb_release -cs) main" > /etc/apt/sources.list.d/azure-cli.list && \
+    apt-get update && apt-get install -y azure-cli && \
+    rm microsoft.gpg
+
+# Install Terraform
+RUN curl -fsSL https://releases.hashicorp.com/terraform/1.5.7/terraform_1.5.7_linux_amd64.zip -o terraform.zip && \
+    unzip terraform.zip && \
+    mv terraform /usr/local/bin/ && \
+    rm terraform.zip
+
+# Install Bicep
+RUN curl -Lo bicep https://github.com/Azure/bicep/releases/latest/download/bicep-linux-x64 && \
+    chmod +x bicep && \
+    mv bicep /usr/local/bin/
+
+# Install PowerShell 7 explicitly
+RUN wget -q https://packages.microsoft.com/config/ubuntu/24.04/packages-microsoft-prod.deb && \
+    dpkg -i packages-microsoft-prod.deb && \
+    apt-get update && apt-get install -y powershell=7.* && \
+    rm packages-microsoft-prod.deb
+
+# Install PowerShell modules (Az and Az.Compute) to the shared modules directory
+RUN pwsh -Command "Install-Module -Name Az -AllowClobber -Force -Scope AllUsers -Repository PSGallery; \
+                   Install-Module -Name Az.Compute -Force -Scope AllUsers -Repository PSGallery" && \
+    pwsh -Command "Get-Module -ListAvailable | Out-String"
+
+# Verify installation of PowerShell modules and ensure correct PSModulePath
+ENV PSModulePath="/opt/microsoft/powershell/7/Modules:$PSModulePath"
+
+# Install Python dependencies
+RUN pip3 install --upgrade pydantic --break-system-packages
+
+# Add the virtual environment's binaries to the PATH
+ENV PATH="/opt/venv/bin:$PATH"
+
+
+# Create a new non-root user
+ARG USERNAME=darick
+ARG USER_UID=1001
+ARG USER_GID=1001
+
+RUN groupadd --gid $USER_GID $USERNAME && \
+    useradd --uid $USER_UID --gid $USER_GID -m $USERNAME && \
+    chown -R $USERNAME:$USERNAME /home/$USERNAME
+
+# Set working directory
+WORKDIR /app
+
+# Switch to non-root user
+USER $USERNAME
+
+# Default command to verify installations and open Bash
+CMD ["bash", "-c", "terraform --version && az --version && bicep --version && pwsh --version && echo 'To use Azure PowerShell, type: pwsh and then use Az cmdlets (e.g., Connect-AzAccount)' && exec bash"]

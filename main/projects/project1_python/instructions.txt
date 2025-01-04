@@ -1,0 +1,66 @@
+Note: You must upload your project artifacts or a link to your publicly-accessible GitHub URL on this assignment page to earn credit.
+
+Project: Library Management System 
+
+Project Overview 
+
+You’ll create a simplified Library Management System. This system will have classes to represent books, users, and the library itself. The system should allow users to borrow and return books, as well as provide details like available books and the borrowing history of a user. 
+
+
+Classes and Structure 
+
+Book: Represents a book in the library. 
+Attributes: 
+title (str) 
+author (str) 
+isbn (str, unique identifier) 
+available (bool, whether the book is available) 
+Methods: 
+__str__: A string representation of the book. 
+borrow_book: Marks the book as borrowed (not available). 
+return_book: Marks the book as returned (available). 
+
+
+User: Represents a user of the library. 
+Attributes: 
+name (str) 
+user_id (str, unique identifier) 
+borrowed_books (list of borrowed books) 
+Methods: 
+borrow_book: Allows the user to borrow a book (if available). 
+return_book: Allows the user to return a borrowed book. 
+view_borrowed_books: Shows all books currently borrowed by the user. 
+
+
+Library: Represents the library, managing books and users. 
+Attributes: 
+books (list of Book objects) 
+users (list of User objects) 
+Methods: 
+add_book: Adds a new book to the library. 
+remove_book: Removes a book from the library. 
+add_user: Registers a new user. 
+remove_user: Removes a user from the library. 
+borrow_book: Facilitates borrowing by interacting with User and Book classes. 
+return_book: Facilitates returning by interacting with User and Book classes. 
+list_available_books: Displays all available books in the library. 
+
+
+
+Unit Testing with unittest 
+
+Create tests for each class and method. 
+
+TestBook 
+Test the creation of a book object. 
+Test borrowing and returning functionality (whether the availability status changes). 
+
+TestUser 
+Test the borrowing functionality (whether the user can borrow available books). 
+Test the return functionality (whether the user can return books). 
+Test viewing borrowed books. 
+
+TestLibrary 
+Test adding and removing books from the library. 
+Test adding and removing users. 
+Test the borrow and return processes to ensure the logic works between Library, User, and Book. 
