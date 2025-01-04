@@ -1,9 +1,11 @@
 ### To run the project use the following commands:
 cd main/projects/project1_python
+
 python3 main.py
 
 ### To test the project use the following commands:
 cd main/projects/project1_python
+
 python3 testcases.py
 
 <br>
