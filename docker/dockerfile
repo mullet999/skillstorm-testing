@@ -67,14 +67,14 @@ RUN pip3 install --upgrade pydantic --break-system-packages
 ENV PATH="/opt/venv/bin:$PATH"
 
 
-# Create a new non-root user
-ARG USERNAME=darick
-ARG USER_UID=1001
-ARG USER_GID=1001
+# running as ubuntu user to fix file permissions for terraform
+ARG USERNAME=ubuntu
+# ARG USER_UID=1000
+# ARG USER_GID=1000
 
-RUN groupadd --gid $USER_GID $USERNAME && \
-    useradd --uid $USER_UID --gid $USER_GID -m $USERNAME && \
-    chown -R $USERNAME:$USERNAME /home/$USERNAME
+# RUN groupadd --gid $USER_GID $USERNAME && \
+#     useradd --uid $USER_UID --gid $USER_GID -m $USERNAME && \
+#     chown -R $USERNAME:$USERNAME /home/$USERNAME
 
 # Set working directory
 WORKDIR /app
