@@ -5,11 +5,37 @@ terraform {
       source = "hashicorp/azurerm"
       version = "4.15.0"
     }
+    azuread = {
+      source  = "hashicorp/azuread"
+      version = "3.1.0"
+    }
   }
 }
 provider "azurerm" {
     features {}
 }
+provider "azuread" {
+  
+}
+
+
+# Create an entra id group: Link to terraform registry - https://registry.terraform.io/providers/hashicorp/azuread/latest/docs/resources/group
+resource "azuread_group" "admin_group1" {
+  display_name     = var.admin_group1_name
+  prevent_duplicate_names = true
+  owners           = [data.azuread_client_config.current.object_id]
+  members          = [data.azuread_client_config.current.object_id, azurerm_linux_virtual_machine_scale_set.lvmss1.identity.0.principal_id]
+  security_enabled = true
+}
+
+# Try to add a role to the group: Link to terraform registry - https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/role_assignment
+  # resource "azurerm_role_assignment" "sa_ra1" {
+  #   scope                = azurerm_storage_account.sa1.id
+  #   role_definition_name = "Storage Blob Data Reader"
+  #   principal_id         = azuread_group.admin_group1.object_id
+  #   principal_type       = "Group"
+  # }
+#
 
 # Create a resource group: Link to terraform registry - https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/resource_group
 resource "azurerm_resource_group" "rg1" {
@@ -62,36 +88,72 @@ resource "azurerm_subnet" "data_subnet" {
 }
 
 # Create network security groups: Link to terraform registry - https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/network_security_group
-resource "azurerm_network_security_group" "nsg1" {
-  name                = var.nsg1_name
+resource "azurerm_network_security_group" "web_nsg1" {
+  name                = var.web_nsg1_name
+  location            = azurerm_resource_group.rg1.location
+  resource_group_name = azurerm_resource_group.rg1.name
+  tags = var.tags
+}
+resource "azurerm_network_security_group" "data_nsg1" {
+  name                = var.data_nsg1_name
   location            = azurerm_resource_group.rg1.location
   resource_group_name = azurerm_resource_group.rg1.name
   tags = var.tags
 }
 
-# Create network security group rules: Link to terraform registry - https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/network_security_rule
-# resource "azurerm_network_security_rule" "inbound_nsg_rule1" {   # Wait to see what the default rules are
-#   name                        = rule1
-#   priority                    = 101
-#   direction                   = "Inbound"
-#   access                      = "Allow"
-#   protocol                    = "Tcp"
-#   source_port_range           = "*"
-#   destination_port_range      = "*"
-#   source_address_prefix       = "*"
-#   destination_address_prefix  = "*"
-#   resource_group_name         = azurerm_resource_group.rg1.name
-#   network_security_group_name = azurerm_network_security_group.nsg1.name
-# }
+#
+  # Create network security group rules: Link to terraform registry - https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/network_security_rule
+  # resource "azurerm_network_security_rule" "inbound_nsg_rule1" {   # Wait to see what the default rules are
+  #   name                        = rule1
+  #   priority                    = 101
+  #   direction                   = "Inbound"
+  #   access                      = "Allow"
+  #   protocol                    = "Tcp"
+  #   source_port_range           = "*"
+  #   destination_port_range      = "*"
+  #   source_address_prefix       = "*"
+  #   destination_address_prefix  = "*"
+  #   resource_group_name         = azurerm_resource_group.rg1.name
+  #   network_security_group_name = azurerm_network_security_group.nsg1.name
+  # }
+#
 
 # Subnet and NSG association: Link to terraform registry - https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/subnet_network_security_group_association
 resource "azurerm_subnet_network_security_group_association" "web_nsg1" {
   subnet_id                 = azurerm_subnet.web_subnet.id
-  network_security_group_id = azurerm_network_security_group.nsg1.id
+  network_security_group_id = azurerm_network_security_group.web_nsg1.id
 }
 resource "azurerm_subnet_network_security_group_association" "data_nsg1" {
   subnet_id                 = azurerm_subnet.data_subnet.id
-  network_security_group_id = azurerm_network_security_group.nsg1.id
+  network_security_group_id = azurerm_network_security_group.data_nsg1.id
+}
+
+# Create private endpoint: Link to terraform registry - https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/private_endpoint
+resource "azurerm_private_endpoint" "mssql_private_endpoint" {
+  name                = "mssql_private_endpoint"
+  location            = azurerm_resource_group.rg1.location
+  resource_group_name = azurerm_resource_group.rg1.name
+  subnet_id           = azurerm_subnet.data_subnet.id
+
+  private_service_connection {
+    name                           = "mssql_privateserviceconnection"
+    private_connection_resource_id = azurerm_mssql_server.mssql_server1.id
+    subresource_names              = ["sqlServer"]
+    is_manual_connection           = false
+  }
+}
+resource "azurerm_private_endpoint" "sa_blob_private_endpoint" {
+  name                = "sa_blob_private_endpoint"
+  location            = azurerm_resource_group.rg1.location
+  resource_group_name = azurerm_resource_group.rg1.name
+  subnet_id           = azurerm_subnet.data_subnet.id
+
+  private_service_connection {
+    name                           = "sa_blob_privateserviceconnection"
+    private_connection_resource_id = azurerm_storage_account.sa1.id
+    subresource_names              = ["blob"]
+    is_manual_connection           = false
+  }
 }
 
 
@@ -151,8 +213,8 @@ resource "azurerm_linux_virtual_machine_scale_set" "lvmss1" {
   location            = azurerm_resource_group.rg1.location
   sku                 = "Standard_B1ls"
   instances           = 2
-  admin_username      = "adminuser"
-  admin_password      = var.lvmss1_admin_password  
+  admin_username      = var.admin_username
+  admin_password      = var.admin_password  
   disable_password_authentication = false
 
   network_interface {
@@ -188,7 +250,7 @@ resource "azurerm_linux_virtual_machine_scale_set" "lvmss1" {
 
   lifecycle {
     ignore_changes = [
-      "instances",
+      instances,
     ] 
   }
   depends_on = [azurerm_lb_rule.lb_rule1]
@@ -196,9 +258,63 @@ resource "azurerm_linux_virtual_machine_scale_set" "lvmss1" {
 
 
 # Create managed database(mssql server and db): Link to terraform registry - https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/mssql_server  &  https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/mssql_database
+resource "azurerm_mssql_server" "mssql_server1" {
+  name                         = var.mssql_server_name
+  resource_group_name          = azurerm_resource_group.rg1.name
+  location                     = azurerm_resource_group.rg1.location
+  version                      = "12.0"
+  administrator_login          = var.admin_username
+  administrator_login_password = var.admin_password
+  minimum_tls_version          = "1.2"
 
+  public_network_access_enabled = false
 
-# Create storage account: Link to terraform registry - https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/storage_account
+  azuread_administrator {
+    login_username = var.admin_group1_name
+    object_id      = azuread_group.admin_group1.object_id
+  }
+
+  tags = var.tags
+}
+
+resource "azurerm_mssql_database" "mssql_db1" {
+  name         = "${var.mssql_server_name}-db1"
+  server_id    = azurerm_mssql_server.mssql_server1.id
+  max_size_gb  = 2
+  sku_name     = "Basic"
+
+  tags = var.tags
+
+  # # prevent the possibility of accidental data loss
+  # lifecycle {
+  #   prevent_destroy = true
+  # }
+}
+
+# Create storage account: Link to terraform registry - https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/storage_account & https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/storage_container
+resource "azurerm_storage_account" "sa1" {
+  name                = var.sa1_name
+  resource_group_name = azurerm_resource_group.rg1.name
+  location                 = azurerm_resource_group.rg1.location
+  account_tier             = "Standard"
+  account_replication_type = "LRS"
+  public_network_access_enabled = false
+
+  network_rules {
+    default_action             = "Deny"
+    ip_rules                   = []
+    virtual_network_subnet_ids = [azurerm_subnet.data_subnet.id]
+  }
+
+  tags = var.tags
+}
+
+resource "azurerm_storage_container" "sa1_c1" {
+  name                  = "sa1-c1"
+  storage_account_id    = azurerm_storage_account.sa1.id
+  container_access_type = "private"
+}
+
 
 
 # Create automation account?

@@ -1,4 +1,26 @@
 
+data "azuread_client_config" "current" {}
+
+
+# user info
+variable "admin_group1_name" {
+  type = string
+  description = "admin group name"
+  default = "jd_admin_group1"
+}
+
+variable "admin_username" {
+  type = string
+  description = "admin username for vmss and mssql server"
+  default = "adminuser"
+}
+variable "admin_password" {
+  type = string
+  description = "admin password for vmss and mssql server"
+  sensitive = true
+}
+
+
 # Create a resource group
 variable "rg_name" {
   type = string
@@ -19,7 +41,7 @@ variable "rg_location" {
 variable "vnet_name" {
   type = string
   description = "Virtual network name"
-  default = "joshua_davis_vnet"
+  default = "jd_vnet"
 }
 
 # Create subnets
@@ -36,10 +58,15 @@ variable "data_subnet_name" {
 
 
 # Create network security groups
-variable "nsg1_name" {
+variable "web_nsg1_name" {
   type = string
-  description = "Network security group name"
-  default = "joshua_davis_nsg1"  
+  description = "web Network security group name"
+  default = "jd_web_nsg1"  
+}
+variable "data_nsg1_name" {
+  type = string
+  description = "data Network security group name"
+  default = "jd_data_nsg1"  
 }
 
 #Create Public IP
@@ -64,17 +91,26 @@ variable "lvmss1_name" {
   default = "lvmss1" 
 }
 
-variable "lvmss1_admin_password" {
+
+# Create managed database
+variable "mssql_server_name" {
   type = string
-  description = "Virtual machine scale set admin password"
-  sensitive = true
+  description = "Managed database server name"
+  default = "jdmssqlserver"  
+}
+variable "mssql_database_name" {
+  type = string
+  description = "Managed database name"
+  default = "jd_mssql_database1"
 }
 
 
-# Create managed database
-
-
 # Create storage account
+variable "sa1_name" {
+  type = string
+  description = "Storage account name"
+  default = "jdsa1"
+}
 
 
 # Create automation account?
