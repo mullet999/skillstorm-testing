@@ -2,4 +2,4 @@
 .env
 .terraform
 .terraform.lock.hcl
-
+tf.plan
