@@ -204,8 +204,8 @@ resource "azurerm_lb_nat_pool" "lb_nat_pool1" {
 # Create load balancer backend probe: Link to terraform registry - https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/lb_probe
 resource "azurerm_lb_probe" "lb1_probe" {
   loadbalancer_id = azurerm_lb.lb1.id
-  name            = "ssh-running-probe"
-  port            = 22
+  name            = "web-running-probe"
+  port            = 80
 }
 
 
