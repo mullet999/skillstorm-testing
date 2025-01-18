@@ -67,15 +67,6 @@ resource "azurerm_subnet" "web_subnet" {
   address_prefixes     = ["10.0.1.0/24"]
 
   default_outbound_access_enabled = true
-
-  # delegation {
-  #   name = "delegation"
-
-  #   service_delegation {
-  #     name    = "Microsoft.ContainerInstance/containerGroups"
-  #     actions = ["Microsoft.Network/virtualNetworks/subnets/join/action", "Microsoft.Network/virtualNetworks/subnets/prepareNetworkPolicies/action"]
-  #   }
-  # }
 }
 resource "azurerm_subnet" "data_subnet" {
   name                 = var.data_subnet_name
@@ -101,22 +92,22 @@ resource "azurerm_network_security_group" "data_nsg1" {
   tags = var.tags
 }
 
-#
-  # Create network security group rules: Link to terraform registry - https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/network_security_rule
-  # resource "azurerm_network_security_rule" "inbound_nsg_rule1" {   # Wait to see what the default rules are
-  #   name                        = rule1
-  #   priority                    = 101
-  #   direction                   = "Inbound"
-  #   access                      = "Allow"
-  #   protocol                    = "Tcp"
-  #   source_port_range           = "*"
-  #   destination_port_range      = "*"
-  #   source_address_prefix       = "*"
-  #   destination_address_prefix  = "*"
-  #   resource_group_name         = azurerm_resource_group.rg1.name
-  #   network_security_group_name = azurerm_network_security_group.nsg1.name
-  # }
-#
+
+# Create network security group rules: Link to terraform registry - https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/network_security_rule
+resource "azurerm_network_security_rule" "inbound_nsg_rule1" {
+  name                        = rule1
+  priority                    = 101
+  direction                   = "Inbound"
+  access                      = "Allow"
+  protocol                    = "Tcp"
+  source_port_range           = "*"
+  destination_port_range      = "80"
+  source_address_prefix       = "*"
+  destination_address_prefixes  = azurerm_subnet.web_subnet.address_prefixes #"*"
+  resource_group_name         = azurerm_resource_group.rg1.name
+  network_security_group_name = azurerm_network_security_group.web_nsg1.name
+}
+
 
 # Subnet and NSG association: Link to terraform registry - https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/subnet_network_security_group_association
 resource "azurerm_subnet_network_security_group_association" "web_nsg1" {
@@ -198,6 +189,18 @@ resource "azurerm_lb_rule" "lb_rule1" {
   probe_id                       = azurerm_lb_probe.lb1_probe.id
 }
 
+# Create load balancer inbound NAT rule: Link to terraform registry - https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/lb_nat_rule
+resource "azurerm_lb_nat_pool" "lb_nat_pool1" {
+  resource_group_name            = azurerm_resource_group.rg1.name
+  loadbalancer_id                = azurerm_lb.lb1.id
+  name                           = "ApplicationPool"
+  protocol                       = "Tcp"
+  frontend_port_start            = 80
+  frontend_port_end              = 80
+  backend_port                   = 80
+  frontend_ip_configuration_name = var.pip1_name
+}
+
 # Create load balancer backend probe: Link to terraform registry - https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/lb_probe
 resource "azurerm_lb_probe" "lb1_probe" {
   loadbalancer_id = azurerm_lb.lb1.id
@@ -245,6 +248,11 @@ resource "azurerm_linux_virtual_machine_scale_set" "lvmss1" {
     sku       = "22_04-lts"
     version   = "latest"
   }
+
+  # custom_data = filebase64("vmss_application/setup-app.sh") # Replace with the path to your startup script
+  custom_data = base64encode(templatefile("vmss_application/setup-app.sh", {
+    storage_account_key = azurerm_storage_account.sa1.primary_access_key
+  }))
 
   tags = var.tags
 
@@ -298,12 +306,12 @@ resource "azurerm_storage_account" "sa1" {
   location                 = azurerm_resource_group.rg1.location
   account_tier             = "Standard"
   account_replication_type = "LRS"
-  public_network_access_enabled = false
+  public_network_access_enabled = true
 
   network_rules {
-    default_action             = "Deny"
-    ip_rules                   = []
-    virtual_network_subnet_ids = [azurerm_subnet.data_subnet.id]
+    default_action             = "Allow" #"Deny"
+    # ip_rules                   = []
+    # virtual_network_subnet_ids = [azurerm_subnet.data_subnet.id]
   }
 
   tags = var.tags
@@ -312,7 +320,15 @@ resource "azurerm_storage_account" "sa1" {
 resource "azurerm_storage_container" "sa1_c1" {
   name                  = "sa1-c1"
   storage_account_id    = azurerm_storage_account.sa1.id
-  container_access_type = "private"
+  container_access_type = "blob"
+}
+
+resource "azurerm_storage_blob" "web_app_zip" {
+  name                   = "my-web-app.zip"
+  storage_account_name   = azurerm_storage_account.sa1.name
+  storage_container_name = azurerm_storage_container.sa1_c1.name
+  type                   = "Block"
+  source                 = "vmss_application/my-web-app.zip"
 }
 
 

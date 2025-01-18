@@ -9,6 +9,7 @@ RUN apt-get update && apt-get install -y \
     git \
     nano \
     curl \
+    zip \
     unzip \
     apt-transport-https \
     software-properties-common \
