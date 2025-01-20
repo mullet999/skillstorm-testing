@@ -67,11 +67,24 @@ RUN pip3 install --upgrade pydantic --break-system-packages
 # Add the virtual environment's binaries to the PATH
 ENV PATH="/opt/venv/bin:$PATH"
 
-
 # running as ubuntu user to fix file permissions for terraform
 ARG USERNAME=ubuntu
 # ARG USER_UID=1000
 # ARG USER_GID=1000
+
+# Prepopulate history for the existing ubuntu user
+RUN echo "ubuntu ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers && \
+    echo "az login" >> /home/ubuntu/.bash_history && \
+    echo "terraform init" >> /home/ubuntu/.bash_history && \
+    echo "terraform plan" >> /home/ubuntu/.bash_history && \
+    chown ubuntu:ubuntu /home/ubuntu/.bash_history
+
+# Configure bash history for the ubuntu user
+RUN echo "export HISTFILE=/home/ubuntu/.bash_history" >> /home/ubuntu/.bashrc && \
+    echo "export HISTFILESIZE=1000" >> /home/ubuntu/.bashrc && \
+    echo "export HISTSIZE=1000" >> /home/ubuntu/.bashrc && \
+    echo "export PROMPT_COMMAND='history -a; history -c; history -r'" >> /home/ubuntu/.bashrc
+
 
 # RUN groupadd --gid $USER_GID $USERNAME && \
 #     useradd --uid $USER_UID --gid $USER_GID -m $USERNAME && \
@@ -83,5 +96,9 @@ WORKDIR /app
 # Switch to non-root user
 USER $USERNAME
 
+# history -s 'az login'
+# history -s 'terraform init'
+# history -s 'terraform plan'
+
 # Default command to verify installations and open Bash
-CMD ["bash", "-c", "terraform --version && az --version && bicep --version && pwsh --version && echo 'To use Azure PowerShell, type: pwsh and then use Az cmdlets (e.g., Connect-AzAccount)' && exec bash"]
+CMD ["bash", "-c", "--login", "-i", "terraform --version && az --version && bicep --version && pwsh --version && echo 'To use Azure PowerShell, type: pwsh and then use Az cmdlets (e.g., Connect-AzAccount)' && exec bash"]
