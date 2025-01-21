@@ -15,7 +15,6 @@ provider "azurerm" {
     features {}
 }
 provider "azuread" {
-  
 }
 
 
@@ -28,24 +27,12 @@ resource "azuread_group" "admin_group1" {
   security_enabled = true
 }
 
-# Try to add a role to the group: Link to terraform registry - https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/role_assignment
-  # resource "azurerm_role_assignment" "sa_ra1" {
-  #   scope                = azurerm_storage_account.sa1.id
-  #   role_definition_name = "Storage Blob Data Reader"
-  #   principal_id         = azuread_group.admin_group1.object_id
-  #   principal_type       = "Group"
-  # }
-#
-
 # Create a resource group: Link to terraform registry - https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/resource_group
 resource "azurerm_resource_group" "rg1" {
   name     = var.rg_name
   location = var.rg_location
   tags = var.tags
 }
-
-# Create a dashboard maybe
-
 
 # Create a virtual network: Link to terraform registry - https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/virtual_network
 resource "azurerm_virtual_network" "vnet1" {
@@ -108,19 +95,19 @@ resource "azurerm_network_security_rule" "inbound_nsg_rule1" {
   resource_group_name         = azurerm_resource_group.rg1.name
   network_security_group_name = azurerm_network_security_group.web_nsg1.name
 }
-# resource "azurerm_network_security_rule" "inbound_nsg_rule2" {
-#   name                        = "rule2"
-#   priority                    = 102
-#   direction                   = "Inbound"
-#   access                      = "Allow"
-#   protocol                    = "Tcp"
-#   source_port_range           = "*"
-#   destination_port_range      = "22"
-#   source_address_prefix       = "*"
-#   destination_address_prefixes  = azurerm_subnet.web_subnet.address_prefixes #"*"
-#   resource_group_name         = azurerm_resource_group.rg1.name
-#   network_security_group_name = azurerm_network_security_group.web_nsg1.name
-# }
+resource "azurerm_network_security_rule" "inbound_nsg_rule2" {
+  name                        = "rule2"
+  priority                    = 102
+  direction                   = "Inbound"
+  access                      = "Allow"
+  protocol                    = "Tcp"
+  source_port_range           = "*"
+  destination_port_range      = "22"
+  source_address_prefix       = "209.239.36.169"
+  destination_address_prefixes  = azurerm_subnet.web_subnet.address_prefixes #"*"
+  resource_group_name         = azurerm_resource_group.rg1.name
+  network_security_group_name = azurerm_network_security_group.web_nsg1.name
+}
 
 
 # Subnet and NSG association: Link to terraform registry - https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/subnet_network_security_group_association
@@ -146,7 +133,24 @@ resource "azurerm_private_endpoint" "mssql_private_endpoint" {
     subresource_names              = ["sqlServer"]
     is_manual_connection           = false
   }
+  private_dns_zone_group {
+    name                 = "mssql-dns-zone-group"
+    private_dns_zone_ids = [azurerm_private_dns_zone.mssql_dns_zone.id]
+  }
 }
+
+resource "azurerm_private_dns_zone" "mssql_dns_zone" {
+  name                = "privatelink.database.windows.net"
+  resource_group_name = azurerm_resource_group.rg1.name
+}
+
+resource "azurerm_private_dns_zone_virtual_network_link" "mssql_dns_network_link" {
+  name                  = "mssql-link"
+  resource_group_name   = azurerm_resource_group.rg1.name
+  private_dns_zone_name = azurerm_private_dns_zone.mssql_dns_zone.name
+  virtual_network_id    = azurerm_virtual_network.vnet1.id
+}
+
 resource "azurerm_private_endpoint" "sa_blob_private_endpoint" {
   name                = "sa_blob_private_endpoint"
   location            = azurerm_resource_group.rg1.location
@@ -159,6 +163,22 @@ resource "azurerm_private_endpoint" "sa_blob_private_endpoint" {
     subresource_names              = ["blob"]
     is_manual_connection           = false
   }
+  private_dns_zone_group {
+    name                 = "sa_blob-dns-zone-group"
+    private_dns_zone_ids = [azurerm_private_dns_zone.sa_blob_dns_zone.id]
+  }
+}
+
+resource "azurerm_private_dns_zone" "sa_blob_dns_zone" {
+  name                = "privatelink.blob.core.windows.net"
+  resource_group_name = azurerm_resource_group.rg1.name
+}
+
+resource "azurerm_private_dns_zone_virtual_network_link" "sa_blob_dns_network_link" {
+  name                  = "sa-blob-link"
+  resource_group_name   = azurerm_resource_group.rg1.name
+  private_dns_zone_name = azurerm_private_dns_zone.sa_blob_dns_zone.name
+  virtual_network_id    = azurerm_virtual_network.vnet1.id
 }
 
 
@@ -202,18 +222,16 @@ resource "azurerm_lb_rule" "lb_rule1" {
   backend_address_pool_ids       = [azurerm_lb_backend_address_pool.lb_backend_address_pool1.id]
   probe_id                       = azurerm_lb_probe.lb1_probe.id
 }
-
-# Create load balancer inbound NAT rule: Link to terraform registry - https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/lb_nat_rule
-# resource "azurerm_lb_nat_pool" "lb_nat_pool1" {
-#   resource_group_name            = azurerm_resource_group.rg1.name
-#   loadbalancer_id                = azurerm_lb.lb1.id
-#   name                           = "ApplicationPool"
-#   protocol                       = "Tcp"
-#   frontend_port_start            = 80
-#   frontend_port_end              = 81
-#   backend_port                   = 80
-#   frontend_ip_configuration_name = var.pip1_name
-# }
+resource "azurerm_lb_rule" "lb_rule2" {
+  loadbalancer_id                = azurerm_lb.lb1.id
+  name                           = "LBRule2"
+  protocol                       = "Tcp"
+  frontend_port                  = 22
+  backend_port                   = 22
+  frontend_ip_configuration_name = var.pip1_name
+  backend_address_pool_ids       = [azurerm_lb_backend_address_pool.lb_backend_address_pool1.id]
+  probe_id                       = azurerm_lb_probe.lb1_probe.id
+}
 
 # Create load balancer backend probe: Link to terraform registry - https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/lb_probe
 resource "azurerm_lb_probe" "lb1_probe" {
@@ -224,19 +242,13 @@ resource "azurerm_lb_probe" "lb1_probe" {
   request_path    = "/"
 }
 
-# resource "azurerm_public_ip_prefix" "main" {
-#   name                = "first-pip"
-#   location            = azurerm_resource_group.rg1.location
-#   resource_group_name = azurerm_resource_group.rg1.name
-# }
-
 # Create linux virtual machines(scale set): Link to terraform registry - https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/linux_virtual_machine_scale_set
 resource "azurerm_linux_virtual_machine_scale_set" "lvmss1" {
   name                = var.lvmss1_name
   resource_group_name = azurerm_resource_group.rg1.name
   location            = azurerm_resource_group.rg1.location
   sku                 = "Standard_B1ls"
-  instances           = 1
+  instances           = 2
   admin_username      = var.admin_username
   admin_password      = var.admin_password  
   disable_password_authentication = false
@@ -277,20 +289,8 @@ resource "azurerm_linux_virtual_machine_scale_set" "lvmss1" {
   # custom_data = filebase64("vmss_application/setup-app.sh") # Replace with the path to your startup script
   custom_data = base64encode(file("vmss_application/setup-app.sh"))
 
-  # custom_data = base64encode(templatefile("vmss_application/setup-app.sh", {
-  #   storage_account_key = azurerm_storage_account.sa1.primary_access_key
-  # }))
-#   custom_data = base64encode(templatefile("setup-app.sh", {
-#   storage_account_key = var.storage_account_key
-# }))
-
   tags = var.tags
 
-  # lifecycle {
-  #   ignore_changes = [
-  #     instances,
-  #   ] 
-  # }
   depends_on = [azurerm_lb_rule.lb_rule1]
 }
 
@@ -322,11 +322,6 @@ resource "azurerm_mssql_database" "mssql_db1" {
   sku_name     = "Basic"
 
   tags = var.tags
-
-  # # prevent the possibility of accidental data loss
-  # lifecycle {
-  #   prevent_destroy = true
-  # }
 }
 
 # Create storage account: Link to terraform registry - https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/storage_account & https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/storage_container
