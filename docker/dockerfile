@@ -76,7 +76,8 @@ ARG USERNAME=ubuntu
 RUN echo "ubuntu ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers && \
     echo "az login" >> /home/ubuntu/.bash_history && \
     echo "terraform init" >> /home/ubuntu/.bash_history && \
-    echo "terraform plan" >> /home/ubuntu/.bash_history && \
+    echo "terraform plan -out='tf.plan'" >> /home/ubuntu/.bash_history && \
+    echo "terraform apply 'tf.plan'" >> /home/ubuntu/.bash_history && \
     chown ubuntu:ubuntu /home/ubuntu/.bash_history
 
 # Configure bash history for the ubuntu user

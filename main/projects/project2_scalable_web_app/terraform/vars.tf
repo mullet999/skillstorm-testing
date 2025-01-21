@@ -111,6 +111,9 @@ variable "sa1_name" {
   description = "Storage account name"
   default = "jdsa1"
 }
+# variable "storage_account_key" {
+#   sensitive = true
+# }
 
 
 # Create automation account?

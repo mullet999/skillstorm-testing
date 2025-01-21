@@ -1,29 +1,16 @@
 #!/bin/bash
 
-# Update and install Nginx
+# Install dependencies
 sudo apt update && sudo apt install -y nginx unzip
 
-# Variables for storage account and blob
-STORAGE_ACCOUNT_NAME="jdsa1"
-STORAGE_ACCOUNT_KEY=""  # Replace this with the key from Terraform
-CONTAINER_NAME="sa1-c1"
-BLOB_NAME="my-web-app.zip"
-DESTINATION="/var/www/html"
+# Download the ZIP file
+wget -O /tmp/site.zip  https://jdsa1.blob.core.windows.net/sa1-c1/my-web-app.zip
 
-# Install Azure CLI to download the blob (if not pre-installed)
-curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
+# Extract the ZIP file
+unzip -o /tmp/site.zip -d /tmp/site_content
 
-# Use storage account key to download the blob
-az storage blob download \
-    --account-name "$STORAGE_ACCOUNT_NAME" \
-    --container-name "$CONTAINER_NAME" \
-    --name "$BLOB_NAME" \
-    --file "/tmp/$BLOB_NAME" \
-    --account-key "$STORAGE_ACCOUNT_KEY"
+# Move extracted files to Nginx's web root
+sudo mv /tmp/site_content/* /var/www/html/
 
-# Extract the ZIP file and move the contents to Nginx web root
-sudo unzip -o "/tmp/$BLOB_NAME" -d "$DESTINATION"
-
-# Restart Nginx to serve the new content
+# Restart Nginx to apply changes
 sudo systemctl restart nginx
-

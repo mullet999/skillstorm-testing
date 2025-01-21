@@ -67,6 +67,7 @@ resource "azurerm_subnet" "web_subnet" {
   address_prefixes     = ["10.0.1.0/24"]
 
   default_outbound_access_enabled = true
+  service_endpoints = ["Microsoft.Sql","Microsoft.Storage"]
 }
 resource "azurerm_subnet" "data_subnet" {
   name                 = var.data_subnet_name
@@ -74,7 +75,7 @@ resource "azurerm_subnet" "data_subnet" {
   virtual_network_name = azurerm_virtual_network.vnet1.name
   address_prefixes     = ["10.0.2.0/24"]
 
-  default_outbound_access_enabled = false
+  default_outbound_access_enabled = true
   service_endpoints = ["Microsoft.Sql","Microsoft.Storage"]
 }
 
@@ -95,7 +96,7 @@ resource "azurerm_network_security_group" "data_nsg1" {
 
 # Create network security group rules: Link to terraform registry - https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/network_security_rule
 resource "azurerm_network_security_rule" "inbound_nsg_rule1" {
-  name                        = rule1
+  name                        = "rule1"
   priority                    = 101
   direction                   = "Inbound"
   access                      = "Allow"
@@ -107,6 +108,19 @@ resource "azurerm_network_security_rule" "inbound_nsg_rule1" {
   resource_group_name         = azurerm_resource_group.rg1.name
   network_security_group_name = azurerm_network_security_group.web_nsg1.name
 }
+# resource "azurerm_network_security_rule" "inbound_nsg_rule2" {
+#   name                        = "rule2"
+#   priority                    = 102
+#   direction                   = "Inbound"
+#   access                      = "Allow"
+#   protocol                    = "Tcp"
+#   source_port_range           = "*"
+#   destination_port_range      = "22"
+#   source_address_prefix       = "*"
+#   destination_address_prefixes  = azurerm_subnet.web_subnet.address_prefixes #"*"
+#   resource_group_name         = azurerm_resource_group.rg1.name
+#   network_security_group_name = azurerm_network_security_group.web_nsg1.name
+# }
 
 
 # Subnet and NSG association: Link to terraform registry - https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/subnet_network_security_group_association
@@ -190,24 +204,31 @@ resource "azurerm_lb_rule" "lb_rule1" {
 }
 
 # Create load balancer inbound NAT rule: Link to terraform registry - https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/lb_nat_rule
-resource "azurerm_lb_nat_pool" "lb_nat_pool1" {
-  resource_group_name            = azurerm_resource_group.rg1.name
-  loadbalancer_id                = azurerm_lb.lb1.id
-  name                           = "ApplicationPool"
-  protocol                       = "Tcp"
-  frontend_port_start            = 80
-  frontend_port_end              = 80
-  backend_port                   = 80
-  frontend_ip_configuration_name = var.pip1_name
-}
+# resource "azurerm_lb_nat_pool" "lb_nat_pool1" {
+#   resource_group_name            = azurerm_resource_group.rg1.name
+#   loadbalancer_id                = azurerm_lb.lb1.id
+#   name                           = "ApplicationPool"
+#   protocol                       = "Tcp"
+#   frontend_port_start            = 80
+#   frontend_port_end              = 81
+#   backend_port                   = 80
+#   frontend_ip_configuration_name = var.pip1_name
+# }
 
 # Create load balancer backend probe: Link to terraform registry - https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/lb_probe
 resource "azurerm_lb_probe" "lb1_probe" {
   loadbalancer_id = azurerm_lb.lb1.id
   name            = "web-running-probe"
   port            = 80
+  protocol        = "Http"
+  request_path    = "/"
 }
 
+# resource "azurerm_public_ip_prefix" "main" {
+#   name                = "first-pip"
+#   location            = azurerm_resource_group.rg1.location
+#   resource_group_name = azurerm_resource_group.rg1.name
+# }
 
 # Create linux virtual machines(scale set): Link to terraform registry - https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/linux_virtual_machine_scale_set
 resource "azurerm_linux_virtual_machine_scale_set" "lvmss1" {
@@ -215,7 +236,7 @@ resource "azurerm_linux_virtual_machine_scale_set" "lvmss1" {
   resource_group_name = azurerm_resource_group.rg1.name
   location            = azurerm_resource_group.rg1.location
   sku                 = "Standard_B1ls"
-  instances           = 2
+  instances           = 1
   admin_username      = var.admin_username
   admin_password      = var.admin_password  
   disable_password_authentication = false
@@ -229,6 +250,10 @@ resource "azurerm_linux_virtual_machine_scale_set" "lvmss1" {
       primary   = true
       subnet_id = azurerm_subnet.web_subnet.id
       load_balancer_backend_address_pool_ids = [azurerm_lb_backend_address_pool.lb_backend_address_pool1.id]
+      # public_ip_address {
+      #   name                = "first"
+      #   public_ip_prefix_id = azurerm_public_ip_prefix.main.id
+      # }
     }
   }
 
@@ -250,17 +275,22 @@ resource "azurerm_linux_virtual_machine_scale_set" "lvmss1" {
   }
 
   # custom_data = filebase64("vmss_application/setup-app.sh") # Replace with the path to your startup script
-  custom_data = base64encode(templatefile("vmss_application/setup-app.sh", {
-    storage_account_key = azurerm_storage_account.sa1.primary_access_key
-  }))
+  custom_data = base64encode(file("vmss_application/setup-app.sh"))
+
+  # custom_data = base64encode(templatefile("vmss_application/setup-app.sh", {
+  #   storage_account_key = azurerm_storage_account.sa1.primary_access_key
+  # }))
+#   custom_data = base64encode(templatefile("setup-app.sh", {
+#   storage_account_key = var.storage_account_key
+# }))
 
   tags = var.tags
 
-  lifecycle {
-    ignore_changes = [
-      instances,
-    ] 
-  }
+  # lifecycle {
+  #   ignore_changes = [
+  #     instances,
+  #   ] 
+  # }
   depends_on = [azurerm_lb_rule.lb_rule1]
 }
 
@@ -309,9 +339,10 @@ resource "azurerm_storage_account" "sa1" {
   public_network_access_enabled = true
 
   network_rules {
+    bypass = []
     default_action             = "Allow" #"Deny"
-    # ip_rules                   = []
-    # virtual_network_subnet_ids = [azurerm_subnet.data_subnet.id]
+    ip_rules                   = []
+    virtual_network_subnet_ids = []#[azurerm_subnet.data_subnet.id]
   }
 
   tags = var.tags
